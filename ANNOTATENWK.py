@@ -1,0 +1,128 @@
+from ete3 import Tree, NodeStyle, TreeStyle, RectFace, TextFace
+import os
+import json
+import pandas as pd
+###### CHECK DIRS
+desktopdirectory = os.path.expanduser("~/Desktop")
+pathforworkingfolder = os.path.join(desktopdirectory, "PROBE")
+if not os.path.exists(pathforworkingfolder):
+    os.mkdir(pathforworkingfolder)
+subfolders = ["USERFILES", "RESULTS", "BLAST-Databases", "BLAST-Search-Results", "App-Files", "QUAST", "PHYLOGENETICS"]
+pathdictionary = {"PROBE": pathforworkingfolder}
+for folder in subfolders:
+    subfolderpath = os.path.join(pathforworkingfolder, folder)
+    if not os.path.exists(subfolderpath):
+        os.makedirs(subfolderpath)
+    pathdictionary[folder] = subfolderpath
+# GET PATHOVAR DICT
+tsvpathlist = [file for file in os.listdir(
+    pathdictionary["USERFILES"]) if file.endswith(".tsv") and "Path" in file]
+frame = pd.read_csv(os.path.join(
+    pathdictionary["USERFILES"], tsvpathlist[0]), sep='\t')
+bacloc = {}
+for row in frame.values:
+    bacloc[row[0].replace(" ", "_")] = row[1]
+pathovars_of_interest = {}
+for key_, value_ in bacloc.items():
+    if value_ == "euvesicatoria" or value_ == "unknown":
+        pathovars_of_interest[key_] = value_
+###### READ THE PRESENCE JSONS, USED IN FOR LOOP ITERATION
+def readresultsjson(queryname, appfiles):
+    presencedict = {}
+    fixedpresencedict = {}
+    for item in os.listdir(appfiles):
+        if item.endswith(".json"):
+            if f"{queryname}" in item and "Presence" in item:
+                jsonpath = os.path.join(appfiles, item)
+    with open(jsonpath, newline='') as jsonfile:
+        presencedict = json.load(jsonfile)
+    for name in presencedict.keys():
+        fixedname = name.replace(" ", "_")
+        presence = presencedict[name]
+        fixedpresencedict[fixedname] = presence
+    return fixedpresencedict
+####### MSA TREE ANNOTATION, VISUALISATION, PRINTING
+x = 0
+for file in os.listdir(pathdictionary["RESULTS"]):
+    if file.endswith(".nwk"):
+        newickpath = os.path.join(pathdictionary["RESULTS"], file)
+        newtree = Tree(newickpath) 
+        file_name = file.strip(".nwk")
+        tree = TreeStyle()
+        nodes = newtree.get_leaves()
+        topnode = nodes[0]
+        #Automatic appending should follow, colours for legend and annotation should match   
+        x += 1
+        presencedict = readresultsjson(file_name, pathdictionary["App-Files"])
+        printname = f"{file_name}_presence_tree_BLASTn.png"
+        tree.show_leaf_name = True
+        tree.force_topology = True
+        tree.draw_guiding_lines = True
+        tree.guiding_lines_color = '#000000'
+        save_path_node_info = os.path.join(pathdictionary["PHYLOGENETICS"], f"Clade_groups_{file_name}_tree_BLASTn.txt")
+        for node in newtree.traverse():
+            treestyle = NodeStyle()
+            treestyle.branch_vertical_line_width = 5
+            new_style = NodeStyle()
+            new_style["bgcolor"] = "light blue"
+            second_style = NodeStyle()
+            second_style["bgcolor"] = "light yellow"
+            node.set_style(treestyle)
+            if len(node) > 2 and not len(node) == 88:
+                leaves = [l.name for l in node.iter_leaves()]
+                with open(save_path_node_info, 'a') as submit:
+                    submit.write(f"One clade has the following grouped together: {leaves}")
+            if node.is_leaf():
+                if node != topnode:
+                    if node.name in presencedict:
+                        node.add_features(genepresence=presencedict.get(node.name))
+                        nodepresence = presencedict.get(node.name)
+                        if "present" in nodepresence:
+                            heatmap = "black" 
+                        elif "inconclusive" in nodepresence:
+                            heatmap = "grey"
+                        else:
+                            heatmap = "white"
+                        heatmapface = RectFace(width=9, height=9, fgcolor="black", bgcolor=heatmap)
+                        node.add_face(heatmapface, column=x, position="aligned") 
+                        if node.name in pathovars_of_interest.keys():
+                            if pathovars_of_interest[node.name] == "euvesicatoria":
+                                node.set_style(new_style)
+                            elif pathovars_of_interest[node.name] == "unknown":
+                                node.set_style(second_style)
+                else:
+                    if node.name in pathovars_of_interest.keys():
+                        if pathovars_of_interest[node.name] == "euvesicatoria":
+                                node.set_style(new_style)
+                        elif pathovars_of_interest[node.name] == "unknown":
+                                node.set_style(second_style)
+                    node.add_features(genepresence=presencedict.get(node.name))
+                    nodepresence2 = presencedict.get(node.name)
+                    if "present" in nodepresence2:
+                        heatmap = "black" 
+                    elif "inconclusive" in nodepresence2:
+                        heatmap = "grey"
+                    else:
+                        heatmap = "white"
+                    topnodetext = TextFace(f"{file_name}", fstyle="bold", fsize=12)
+                    topnodetext.rotation = 90
+                    topnode.add_face(topnodetext, column=x, position="aligned")
+                    heatmapface = RectFace(width=9, height=9, fgcolor="black", bgcolor=heatmap)
+                    node.add_face(heatmapface, column=x, position="aligned")
+                    spacer = RectFace(width=9, height=9, fgcolor="white", bgcolor="white")
+                    topnode.add_face(spacer, column=x, position="aligned")
+                    spacer = RectFace(width=9, height=9, fgcolor="white", bgcolor="white")
+                    topnode.add_face(spacer, column=x, position="aligned")
+                    spacer = RectFace(width=9, height=9, fgcolor="white", bgcolor="white")
+                    topnode.add_face(spacer, column=x, position="aligned")
+        tree.legend.add_face(
+            RectFace(width=6, height=6, fgcolor="black", bgcolor="black"), column=x)
+        tree.legend.add_face(TextFace("Present: Near Identical Hit ( >=97%)", fsize=10,
+                            ftype="Times New Roman"), column=x+1)
+        tree.legend.add_face(
+            RectFace(width=6, height=6, fgcolor="black", bgcolor="grey"), column=x)
+        tree.legend.add_face(TextFace("Present: Query/Genome overlap significant (<97%)",
+                            fsize=10, ftype="Times New Roman"), column=x+1)
+        tree.legend_position = 3
+        printpath = os.path.join(pathdictionary["PHYLOGENETICS"], printname)
+        newtree.render(printpath, dpi= 1000, tree_style=tree)
