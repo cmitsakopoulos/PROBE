@@ -4,12 +4,12 @@ import json
 import pandas as pd
 # CHECK DIRS
 desktopdirectory = os.path.expanduser("~/Desktop")
-pathforworkingfolder = os.path.join(desktopdirectory, "MINAGIASGENE")
+pathforworkingfolder = os.path.join(desktopdirectory, "PROBE")
 if not os.path.exists(pathforworkingfolder):
     os.mkdir(pathforworkingfolder)
 subfolders = ["USERFILES", "RESULTS", "BLAST-Databases",
               "BLAST-Search-Results", "App-Files", "QUAST", "PHYLOGENETICS"]
-pathdictionary = {"MINAGIAS": pathforworkingfolder}
+pathdictionary = {"PROBE": pathforworkingfolder}
 for folder in subfolders:
     subfolderpath = os.path.join(pathforworkingfolder, folder)
     if not os.path.exists(subfolderpath):
